@@ -150,3 +150,12 @@ tmp/
 
 # FastAPI/Uvicorn specific
 .uvicorn/
+
+# Docker
+docker-compose.override.yml
+.env
+.env.local
+.env.production
+
+# SSL certificates
+ssl/

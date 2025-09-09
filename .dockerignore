@@ -1,0 +1,72 @@
+# Docker ignore file for better build performance
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Testing and development files
+test_*.py
+demo.py
+debug_*.py
+*_test.py
+*.jpeg
+*.png
+*.jpg
+
+# Documentation and analysis
+*.md
+*.json
+nohup.out
+*.log
+
+# Development scripts
+start_server.sh
+web_client.html
+
+# Temporary files
+temp/
+tmp/
+logs/
