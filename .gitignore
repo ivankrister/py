@@ -1,0 +1,152 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Virtual environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Environment variables
+.env
+.env.*
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.code-workspace
+
+# OS files - macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# OS files - Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# OCR Processing outputs
+debug_*.png
+*_adaptive*.png
+*_otsu*.png
+*_scaled*.png
+*_threshold*.png
+*_original*.png
+*_blur*.png
+*_gray*.png
+
+# Analysis and comparison results
+comprehensive_ocr_analysis_results.json
+ocr_accuracy_comparison.json
+ocr_comparison_*.json
+OPTIMIZATION_RESULTS.md
+SUCCESS_SUMMARY.md
+
+# Test files
+test_sample.png
+sample_receipt.*
+test_receipt.*
+
+# Background process files
+nohup.out
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+temp/
+tmp/
+
+# FastAPI/Uvicorn specific
+.uvicorn/
