@@ -1,0 +1,118 @@
+# Production Docker Compose Configuration
+# Use this for production: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  ocr-api:
+    # Use pre-built image from registry in production
+    # image: your-registry.com/receipt-ocr:latest
+    environment:
+      # Production environment variables
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - WORKERS=4
+    # Don't expose port directly in production (use nginx)
+    ports: []
+    expose:
+      - "8000"
+    # Enhanced security for production
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+    # Use secrets for sensitive data
+    secrets:
+      - api_key
+      - db_password
+    # Production volumes (read-only where possible)
+    volumes:
+      - logs_volume:/app/logs
+      - ./config:/app/config:ro
+    # Network isolation
+    networks:
+      - internal
+      - web
+
+  nginx:
+    # Always include nginx in production
+    profiles: []
+    # Production nginx configuration
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl:ro
+      - logs_volume:/var/log/nginx
+    networks:
+      - web
+    # Enhanced security
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+
+  # Production monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ocr-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    restart: unless-stopped
+    networks:
+      - internal
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ocr-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=secure_password_change_me
+    restart: unless-stopped
+    networks:
+      - internal
+    profiles:
+      - monitoring
+
+# Production volumes
+volumes:
+  logs_volume:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# Production networks
+networks:
+  web:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: ocr-web
+  internal:
+    driver: bridge
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: ocr-internal
+
+# Production secrets
+secrets:
+  api_key:
+    file: ./secrets/api_key.txt
+  db_password:
+    file: ./secrets/db_password.txt

@@ -4,8 +4,9 @@ services:
   ocr-api:
     build: .
     container_name: receipt-ocr-api
-    ports:
-      - "8000:8000"
+    # Remove direct port exposure - access through nginx only
+    # ports:
+    #   - "8000:8000"
     environment:
       - HOST=0.0.0.0
       - PORT=8000
@@ -21,7 +22,7 @@ services:
       retries: 3
       start_period: 40s
 
-  # Optional: Add Nginx as reverse proxy for production
+  # Nginx reverse proxy
   nginx:
     image: nginx:alpine
     container_name: ocr-nginx
@@ -34,8 +35,6 @@ services:
     depends_on:
       - ocr-api
     restart: unless-stopped
-    profiles:
-      - production
 
 networks:
   default:
