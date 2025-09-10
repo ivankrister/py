@@ -275,6 +275,7 @@ class ReceiptOCR:
                 preprocessing_methods = [
                     ("adaptive_threshold_enhanced", self._maya_adaptive_threshold_enhanced),
                     ("adaptive_threshold", self._adaptive_threshold_preprocessing),
+                    ("alternative", self._alternative_preprocessing),  # Added this as it shows good results for maya2.jpeg
                     ("enhanced", self._enhanced_preprocessing),
                     ("standard", self._standard_preprocessing)
                 ]
@@ -349,15 +350,30 @@ class ReceiptOCR:
                             }
                         }
                         
-                        # Use this result if it has better adjusted confidence
-                        if adjusted_confidence > best_confidence:
+                        # Use this result if it has better adjusted confidence AND contains actual text
+                        # Prioritize results with text over empty results, even if confidence is lower
+                        is_better_result = False
+                        
+                        if full_text and len(full_text.strip()) > 0:
+                            # This result has text
+                            if not best_result or len(best_result.get('extracted_text', '').strip()) == 0:
+                                # Current best has no text, so this is definitely better
+                                is_better_result = True
+                            elif adjusted_confidence > best_confidence:
+                                # Both have text, choose higher confidence
+                                is_better_result = True
+                        elif not best_result or (len(best_result.get('extracted_text', '').strip()) == 0 and adjusted_confidence > best_confidence):
+                            # Neither has text, choose higher confidence
+                            is_better_result = True
+                        
+                        if is_better_result:
                             best_result = current_result
                             best_confidence = adjusted_confidence
                             best_method = method_name
                             best_config = config
                             
-                            # Early exit if we have a very high confidence result
-                            if adjusted_confidence >= 150:  # Very high confidence
+                            # Early exit if we have a very high confidence result WITH TEXT
+                            if adjusted_confidence >= 150 and full_text and len(full_text.strip()) > 0:
                                 logger.info(f"Early exit with excellent result: {best_method}+{best_config}")
                                 break
                         
@@ -365,8 +381,8 @@ class ReceiptOCR:
                         logger.warning(f"Method {method_name}+{config} failed: {str(e)}")
                         continue
                 
-                # Early exit if we found an excellent result
-                if best_confidence >= 150:
+                # Early exit if we found an excellent result with actual text
+                if best_confidence >= 150 and best_result and len(best_result.get('extracted_text', '').strip()) > 0:
                     break
             
             if best_result is None:
@@ -551,10 +567,9 @@ class ReceiptOCR:
             elif '639772478589' in text:
                 boost += 60  # Phone without +
             
-            if 'eb8c' in text_lower and 'c67b' in text_lower:
-                boost += 70  # Reference ID pattern match
-            elif 'reference' in text_lower and ('eb8' in text_lower or 'c67b' in text_lower):
-                boost += 40  # Partial reference match
+            # General reference ID pattern boost (any format)
+            if 'reference id' in text_lower or 'reference:' in text_lower:
+                boost += 40  # General reference keyword found
             
             if 'received money from' in text_lower:
                 boost += 30  # Maya signature phrase
@@ -639,15 +654,20 @@ class ReceiptOCR:
                 receipt_data['phone_number'] = expected_phone
             else:
                 phone_patterns = [
-                    r'(\+639\d{9})',
-                    r'(639\d{9})',
-                    r'(\+63\s*9\d{8})'
+                    r'(\+639\s*\d{9})',  # +639 xxxxxxxxx with possible space
+                    r'(\+639\d{9})',     # +639xxxxxxxxx without space
+                    r'(639\s*\d{9})',    # 639 xxxxxxxxx with possible space
+                    r'(639\d{9})',       # 639xxxxxxxxx without space
+                    r'(\+63\s*9\d{8})'   # +63 9xxxxxxxx
                 ]
                 
                 for pattern in phone_patterns:
                     phone_match = re.search(pattern, cleaned_text)
                     if phone_match:
                         phone = phone_match.group(1)
+                        # Remove all spaces first
+                        phone = re.sub(r'\s+', '', phone)
+                        # Add + if not present
                         if not phone.startswith('+'):
                             phone = '+' + phone
                         receipt_data['phone_number'] = phone
@@ -655,12 +675,12 @@ class ReceiptOCR:
             
             # Extract reference ID with receipt-type specific patterns
             if receipt_type == 'maya':
-                # Maya reference: "EB8C C4C5 C67B" with spaces
+                # Maya reference can be in different formats - just extract the alphanumeric reference
                 ref_patterns = [
-                    r'Reference[:\s]*ID[:\s]*([A-Z0-9\s@:\'éç©\.]{8,20})',
-                    r'Reference[:\s]*([A-Z0-9\s@:\'éç©\.]{8,20})',
-                    r'Ref[\.:\s]*([A-Z0-9\s@:\'éç©\.]{8,20})',
-                    r'EB8[A-Z0-9\s@:\'éç©\.]+C[0-9A-Z\s@:\'éç©\.]+C[0-9A-Z\s@:\'éç©\.]+B'
+                    r'Reference[:\s]*ID[:\s]*([A-Z0-9\s@:\'éç©\.]{8,20})',  # "Reference ID: XXXX XXXX XXXX"
+                    r'Reference[:\s]*([A-Z0-9\s@:\'éç©\.]{8,20})',          # "Reference: XXXX XXXX XXXX"
+                    r'Ref[\.:\s]*([A-Z0-9\s@:\'éç©\.]{8,20})',             # "Ref: XXXX XXXX XXXX"
+                    r'([A-Z0-9]{3,4}\s+[A-Z0-9]{3,6}\s+[A-Z0-9]{3,4})',     # Pattern like "172F EDCS5 80BD"
                 ]
                 
                 for pattern in ref_patterns:
@@ -675,29 +695,10 @@ class ReceiptOCR:
                         ref_id_clean = re.sub(r'[^A-Z0-9\s]', '', ref_id.upper())
                         ref_id_clean = re.sub(r'\s+', ' ', ref_id_clean).strip()
                         
-                        # Check if it looks like the expected Maya format
-                        if (ref_id_clean.startswith('EB8') and ref_id_clean.endswith('B') and 'C' in ref_id_clean) or \
-                           ('EB8' in ref_id_clean and 'C67B' in ref_id_clean):
-                            
-                            # Try to reconstruct the proper format: "EB8C C4C5 C67B"
-                            no_spaces = re.sub(r'\s', '', ref_id_clean)
-                            
-                            if 'EB8CC4C5C67B' in no_spaces:
-                                receipt_data['reference_id'] = 'EB8C C4C5 C67B'
-                                break
-                            elif 'EB8C4C5C67B' in no_spaces:
-                                receipt_data['reference_id'] = 'EB8C C4C5 C67B'  # Missing 64, but format correctly
-                                break
-                            elif len(no_spaces) >= 10 and no_spaces.startswith('EB8') and no_spaces.endswith('C67B'):
-                                # Format as EB8C XXXX C67B
-                                if len(no_spaces) == 11:  # EB8CXXXXC67B
-                                    formatted = f"EB8C {no_spaces[4:8]} C67B"
-                                    receipt_data['reference_id'] = formatted
-                                    break
-                                elif len(no_spaces) == 12:  # EB8CXXXXXC67B  
-                                    formatted = f"EB8C {no_spaces[4:9]} C67B"
-                                    receipt_data['reference_id'] = formatted
-                                    break
+                        # Accept any valid alphanumeric reference (no hardcoded patterns)
+                        if len(ref_id_clean) >= 8 and re.match(r'^[A-Z0-9\s]+$', ref_id_clean):
+                            receipt_data['reference_id'] = ref_id_clean
+                            break
                             
             else:  # gcash or unknown
                 # GCash reference: numeric like "9032469742237"
@@ -716,6 +717,50 @@ class ReceiptOCR:
                             not ref_id.startswith('639')):  # Not a phone number
                             receipt_data['reference_id'] = ref_id
                             break
+            
+            # Extract date patterns
+            date_patterns = [
+                r'Completed\s+([A-Za-z]+\s*\&?\d{1,2},?\s*\d{4})',  # "Completed Sep &, 2025"
+                r'v\s+Completed\s+([A-Za-z]+\s*\&?\d{1,2},?\s*\d{4})',  # "v Completed Sep &, 2025"
+                r'(?:Completed|completed)\s+([A-Za-z]{3}\s*\&?\d{1,2},?\s*\d{4})',  # More specific month pattern
+                r'([A-Za-z]{3}\s*\&?\d{1,2},?\s*\d{4})(?=\s*[,\s]*\d{2}:\d{2})',  # Month pattern before time
+                r'(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})',  # 9/9/2025 or 9-9-2025
+                r'(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})',  # 2025/9/9
+            ]
+            
+            for pattern in date_patterns:
+                date_match = re.search(pattern, cleaned_text, re.IGNORECASE)
+                if date_match:
+                    date_str = date_match.group(1)
+                    # Clean up common OCR errors
+                    date_str = date_str.replace('&', '8')  # Common OCR error
+                    date_str = re.sub(r'(\w{3})(\d)', r'\1 \2', date_str)  # Add space: Sep9 -> Sep 9
+                    receipt_data['date'] = date_str.strip()
+                    break
+            
+            # Extract sender/recipient name
+            if receipt_type == 'maya':
+                # Maya format: "- from Sarah Jane"
+                sender_patterns = [
+                    r'-\s*from\s+([A-Za-z\s]+?)(?:\s*Reference|\s*$)',  # "- from Sarah Jane"
+                    r'from\s+([A-Za-z\s]+?)(?:\s*Reference|\s*$)',     # "from Sarah Jane"
+                ]
+            else:
+                # GCash format
+                sender_patterns = [
+                    r'GCash\s+from\s+([A-Za-z0-9\s]+?),\s*\+?639',  # GCash from NAME,+639...
+                    r'from\s+([A-Za-z0-9\s]+?),\s*\+?639',          # from NAME,+639...
+                ]
+            
+            for pattern in sender_patterns:
+                sender_match = re.search(pattern, cleaned_text, re.IGNORECASE)
+                if sender_match:
+                    sender_name = sender_match.group(1).strip()
+                    # Clean up the name
+                    sender_name = re.sub(r'\s+', ' ', sender_name)
+                    if len(sender_name) > 1:
+                        receipt_data['sender'] = sender_name
+                        break
             
             return receipt_data
             
